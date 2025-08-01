@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqtt-pika-subscriber
+  labels:
+    app: mqtt-pika-subscriber
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt-pika-subscriber
+  template:
+    metadata:
+      labels:
+        app: mqtt-pika-subscriber
+    spec:
+      containers:
+      - name: mqtt-pika-subscriber
+        image: rocket000/mqtt-pika-subscriber:1.0
+        env:
+          - name: RABBITMQ_NODES
+            value: "192.168.0.85:5672,192.168.1.89:5672"
+          - name: RABBITMQ_USERNAME
+            value: "consumer"
+          - name: RABBITMQ_PASSWORD
+            value: "consumer"
+          - name: RABBITMQ_QUEUE
+            value: "telemetry"
+          - name: RABBITMQ_PREFETCH
+            value: "100"
+          - name: RABBITMQ_TLS
+            value: "0"
+          - name: RABBITMQ_CA_CERT
+            value: "/certs/ca.pem"
+          - name: RABBITMQ_CLIENT_CERT
+            value: "/certs/client.pem"
+          - name: RABBITMQ_CLIENT_KEY
+            value: "/certs/client.key"
+          - name: MONGO_URI
+            value: "mongodb://192.168.2.56:2717/"
+          - name: MONGO_DB
+            value: "RabbiMq"
+          - name: MONGO_COLLECTION
+            value: "telemetry"
+          - name: LOG_LEVEL
+            value: "INFO"
