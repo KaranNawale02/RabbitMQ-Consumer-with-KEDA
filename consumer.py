@@ -59,7 +59,7 @@ class Settings:
     """Read & validate environment variables."""
 
     def __init__(self) -> None:
-        # load_dotenv(override=False)  # only effective for local development
+        load_dotenv(override=False)  # only effective for local development
 
         # RabbitMQ
         self.rabbitmq_nodes: list[tuple[str, int]] = [
@@ -157,9 +157,9 @@ class MongoClientWrapper:
 
 
 class RabbitConsumer:
-    def __init__(self, mongo: MongoClientWrapper, stop: asyncio.Event) -> None:
+    def __init__(self, mongo: MongoClientWrapper, stop_event: asyncio.Event) -> None:
         self.mongo = mongo
-        self.stop = stop
+        self._stop_event = stop_event
 
         self._connection: Optional[aio_pika.RobustConnection] = None
         self._channel: Optional[aio_pika.RobustChannel] = None
@@ -167,7 +167,7 @@ class RabbitConsumer:
 
     async def _connect(self) -> None:
         delay = 1
-        while not self.stop.is_set():
+        while not self._stop_event.is_set():
             print(CFG.rabbitmq_nodes)
             for host, port in CFG.rabbitmq_nodes:
                 try:
@@ -223,18 +223,18 @@ class RabbitConsumer:
 
     async def run(self) -> None:
         """Main lifecycle – keeps reconnecting until stop event is set."""
-        while not self.stop.is_set():
+        while not self._stop_event.is_set():
             await self._connect()
             # wait until stop or connection is closed
             while (
-                not self.stop.is_set()
+                not self._stop_event.is_set()
                 and self._connection
                 and not self._connection.is_closed
             ):
                 await asyncio.sleep(1)
 
     async def stop(self) -> None:
-        self.stop.set()
+        self._stop_event.set()
         if self._channel and self._consumer_tag:
             try:
                 await self._channel.cancel(self._consumer_tag)

@@ -1,11 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d9dfec3-5aa2-426e-b5b9-8d33263ecaf3" name="Changes" comment="" />
+    <list default="true" id="2d9dfec3-5aa2-426e-b5b9-8d33263ecaf3" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/consumer.py" beforeDir="false" afterPath="$PROJECT_DIR$/consumer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/WiredTiger.turtle" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/WiredTiger.turtle" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/WiredTiger.wt" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/WiredTiger.wt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/collection-2-2254985609712558854.wt" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/collection-2-2254985609712558854.wt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/collection-4-2254985609712558854.wt" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/collection-4-2254985609712558854.wt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/index-3-2254985609712558854.wt" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/index-3-2254985609712558854.wt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/index-5-2254985609712558854.wt" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/index-5-2254985609712558854.wt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/index-6-2254985609712558854.wt" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/index-6-2254985609712558854.wt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/journal/WiredTigerLog.0000000002" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/journal/WiredTigerPreplog.0000000003" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/mongod.lock" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/mongod.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mongos/db1/sizeStorer.wt" beforeDir="false" afterPath="$PROJECT_DIR$/mongos/db1/sizeStorer.wt" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 3
@@ -20,9 +41,17 @@
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "Python.consumer.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
     "settings.editor.selected.configurable": "preferences.pluginManager"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
