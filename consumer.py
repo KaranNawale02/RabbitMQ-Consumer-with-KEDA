@@ -38,10 +38,8 @@ import json
 import logging
 import os
 import signal
-import ssl
 import sys
-import time
-from typing import Any, Optional
+from typing import Optional
 
 import aio_pika
 from dotenv import load_dotenv
@@ -72,6 +70,7 @@ class Settings:
         self.rabbitmq_queue: str = os.getenv("RABBITMQ_QUEUE", "telemetry")
         self.rabbitmq_prefetch: int = int(os.getenv("RABBITMQ_PREFETCH", 100))
         self.rabbitmq_tls: bool = os.getenv("RABBITMQ_TLS", "0") == "1"
+        self.max_message_retry : int = os.getenv("RABBITMQ_MAX_RETRY", "5")
         # self.rabbitmq_port: int = int(
         #     os.getenv("RABBITMQ_PORT", 5671 if os.getenv("RABBITMQ_TLS") else 5672)
         # )
@@ -126,7 +125,7 @@ class MongoClientWrapper:
         delay = 1
         while not stop.is_set():
             try:
-                LOG.info("Connecting to MongoDB %s ...", self._uri)
+                LOG.info("[MONGO CONNECT] Connecting to MongoDB %s ...", self._uri)
                 self._client = AsyncIOMotorClient(
                     self._uri,
                     connectTimeoutMS=5_000,
@@ -137,10 +136,10 @@ class MongoClientWrapper:
                 # simple ping
                 await self._client.admin.command("ping")
                 self._collection = self._client[self._db_name][self._coll_name]
-                LOG.info("MongoDB connected.")
+                LOG.info("[MONGO CONNECT] MongoDB connected.")
                 return
             except Exception as exc:
-                LOG.warning("MongoDB connection failed: %s – retrying in %ss", exc, delay)
+                LOG.warning("[MONGO CONNECT] MongoDB connection failed: %s – retrying in %ss", exc, delay)
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 30)
 
@@ -152,9 +151,7 @@ class MongoClientWrapper:
     async def close(self) -> None:
         if self._client:
             self._client.close()
-            LOG.info("MongoDB connection closed.")
-
-
+            LOG.info("[MONGO CLOSE] MongoDB connection closed.")
 
 class RabbitConsumer:
     def __init__(self, mongo: MongoClientWrapper, stop_event: asyncio.Event) -> None:
@@ -165,13 +162,15 @@ class RabbitConsumer:
         self._channel: Optional[aio_pika.RobustChannel] = None
         self._consumer_tag: Optional[str] = None
 
+        self._max_attempts = int(CFG.max_message_retry)
+
     async def _connect(self) -> None:
         delay = 1
         while not self._stop_event.is_set():
             print(CFG.rabbitmq_nodes)
             for host, port in CFG.rabbitmq_nodes:
                 try:
-                    LOG.info("Trying RabbitMQ node %s:%s ...", host, port)
+                    LOG.info(f"[CONNECT] Trying RabbitMQ node %s:%s ...", host, port)
                     self._connection = await aio_pika.connect_robust(
                         host=host,
                         port=port,
@@ -184,42 +183,59 @@ class RabbitConsumer:
                     self._channel = await self._connection.channel()
                     await self._channel.set_qos(prefetch_count=CFG.rabbitmq_prefetch)
 
-                    queue = await self._channel.declare_queue(
-                        CFG.rabbitmq_queue,
-                        durable=True,
-                        arguments={"x-queue-type": "quorum"},
-                    )
-
+                    queue = await self._channel.get_queue(CFG.rabbitmq_queue)
                     self._consumer_tag = await queue.consume(self._on_message, no_ack=False)
-                    LOG.info("✅ Connected and consuming from RabbitMQ node: %s:%s", host, port)
+
+                    LOG.info("[CONNECT] ✅ Connected and consuming from RabbitMQ node: %s:%s", host, port)
                     return
                 except Exception as exc:
-                    LOG.warning("❌ Failed to connect to %s:%s: %s", host, port, exc)
+                    LOG.warning("[CONNECT] ❌ Failed to connect to %s:%s: %s", host, port, exc)
                     continue
 
-            LOG.warning("⚠️ All RabbitMQ nodes failed – retrying in %ss", delay)
+            LOG.warning("[CONNECT] ⚠️ All RabbitMQ nodes failed – retrying in %ss", delay)
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)
 
+## for multiple retry: 5
+    async def _requeue_or_dlq(self, message: aio_pika.IncomingMessage):
+        payload = json.loads(message.body)
+        counter = payload.get("counter", 0)
+        payload["counter"] = counter + 1
+
+        if payload["counter"] > self._max_attempts:
+            LOG.info(f"[SEND_TO_QUEUE_OR_DROP] Max retry reached ({self._max_attempts}) Sending to -> DLQ.")
+            await message.reject(requeue=False)
+            return
+
+        LOG.info(f"[SEND_TO_QUEUE_OR_DROP] Retrying message, attempt {payload['counter']}")
+        # Republish using default exchange
+        await self._channel.default_exchange.publish(
+            aio_pika.Message(
+                body=json.dumps(payload).encode(),
+                content_type="application/json",
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            ),
+            routing_key=CFG.rabbitmq_queue
+        )
+        # ack the current message so that current message will be dropped by broker
+        await message.ack()
+
     async def _on_message(self, message: aio_pika.IncomingMessage) -> None:
         try:
-            if not message.body.strip():
-                LOG.warning("Empty message – skipping.")
-                await message.ack()
-                return
-
             doc = json.loads(message.body)
-            print(doc)
+            LOG.info(f"[ON_MESSAGE] Message Received : {doc}")
+            if doc.get("type", "") == "failed_message":
+                LOG.warning(f"[ON_MESSAGE] ⚠️ Message processing failed.")
+                raise PyMongoError
+
             await self.mongo.insert(doc)
             await message.ack()
-            LOG.debug("Message processed and ACKed.")
-        except PyMongoError:
-            LOG.exception("Transient Mongo error – NACK requeue")
-            await message.nack(requeue=True)
-        except Exception:
-            LOG.exception("Permanent failure – message sent to DLQ / dropped")
-            await message.reject(requeue=False)
 
+        except PyMongoError:
+           await self._requeue_or_dlq(message=message)
+        except Exception as e:
+            LOG.error(f"[ON_MESSAGE] Some error occurred : {e} -> sending to DLQ")
+            await message.reject(requeue=False)
 
     async def run(self) -> None:
         """Main lifecycle – keeps reconnecting until stop event is set."""
@@ -242,7 +258,7 @@ class RabbitConsumer:
                 pass
         if self._connection and not self._connection.is_closed:
             await self._connection.close()
-        LOG.info("Rabbit consumer stopped.")
+        LOG.info("[STOP] Rabbit consumer stopped.")
 
 
 async def main_async() -> None:
@@ -262,21 +278,21 @@ async def main_async() -> None:
 
     # Wait for shutdown
     await stop_event.wait()
-    LOG.info("Shutdown requested … waiting for tasks to finish")
+    LOG.info("[MAIN-ASYNC] Shutdown requested … waiting for tasks to finish")
 
     await consumer.stop()
     await mongo.close()
     await asyncio.wait_for(consumer_task, timeout=10)
-    LOG.info("Service exited cleanly.")
+    LOG.info("[MAIN-ASYNC] Service exited cleanly.")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main_async())
     except ConfigError as ce:
-        LOG.error("Configuration error: %s", ce)
+        LOG.error(f"[MAIN] Configuration error: %s", ce)
         sys.exit(1)
     except Exception as exc:
-        LOG.exception("Fatal error: %s", exc)
+        LOG.exception(f"[MAIN] Fatal error: %s", exc)
         sys.exit(2)
 
