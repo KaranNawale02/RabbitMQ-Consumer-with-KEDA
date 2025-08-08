@@ -70,7 +70,7 @@ class Settings:
         self.rabbitmq_queue: str = os.getenv("RABBITMQ_QUEUE", "telemetry")
         self.rabbitmq_prefetch: int = int(os.getenv("RABBITMQ_PREFETCH", 100))
         self.rabbitmq_tls: bool = os.getenv("RABBITMQ_TLS", "0") == "1"
-        self.max_message_retry : int = os.getenv("RABBITMQ_MAX_RETRY", "5")
+        self.max_message_retry : str = os.getenv("RABBITMQ_MAX_RETRY", "5")
         # self.rabbitmq_port: int = int(
         #     os.getenv("RABBITMQ_PORT", 5671 if os.getenv("RABBITMQ_TLS") else 5672)
         # )
@@ -196,45 +196,28 @@ class RabbitConsumer:
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)
 
-## for multiple retry: 5
-    async def _requeue_or_dlq(self, message: aio_pika.IncomingMessage):
-        payload = json.loads(message.body)
-        counter = payload.get("counter", 0)
-        payload["counter"] = counter + 1
-
-        if payload["counter"] > self._max_attempts:
-            LOG.info(f"[SEND_TO_QUEUE_OR_DROP] Max retry reached ({self._max_attempts}) Sending to -> DLQ.")
-            await message.reject(requeue=False)
-            return
-
-        LOG.info(f"[SEND_TO_QUEUE_OR_DROP] Retrying message, attempt {payload['counter']}")
-        # Republish using default exchange
-        await self._channel.default_exchange.publish(
-            aio_pika.Message(
-                body=json.dumps(payload).encode(),
-                content_type="application/json",
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
-            ),
-            routing_key=CFG.rabbitmq_queue
-        )
-        # ack the current message so that current message will be dropped by broker
-        await message.ack()
-
     async def _on_message(self, message: aio_pika.IncomingMessage) -> None:
         try:
-            doc = json.loads(message.body)
-            LOG.info(f"[ON_MESSAGE] Message Received : {doc}")
-            if doc.get("type", "") == "failed_message":
-                LOG.warning(f"[ON_MESSAGE] ⚠️ Message processing failed.")
-                raise PyMongoError
+            if not message.body.strip():
+                LOG.warning("[ON_MESSAGE] Empty message – skipping.")
+                await message.ack()
+                return
 
+            doc = json.loads(message.body)
+            if doc.get("type", "") == "failed_message":
+                raise PyMongoError
             await self.mongo.insert(doc)
             await message.ack()
+            LOG.debug("[ON_MESSAGE] Message processed and ACKed.")
+            LOG.info("[ON_MESSAGE] Message processed and ACK")
 
         except PyMongoError:
-           await self._requeue_or_dlq(message=message)
+            LOG.exception("[ON_MESSAGE] Transient Mongo error.")
+            LOG.info("[ON_MESSAGE] Requeueing message.")
+            await message.nack(requeue=True)
+
         except Exception as e:
-            LOG.error(f"[ON_MESSAGE] Some error occurred : {e} -> sending to DLQ")
+            LOG.exception(f"[ON_MESSAGE] Unknown Exception :{e} –> sent to DLQ")
             await message.reject(requeue=False)
 
     async def run(self) -> None:

@@ -37,7 +37,7 @@ spec:
           - name: RABBITMQ_CLIENT_KEY
             value: "/certs/client.key"
           - name: MONGO_URI
-            value: "mongodb://192.168.2.56:2717/"
+            value: "mongodb://admin:secret@192.168.2.60:27017,192.168.2.61:27017/?replicaSet=rs0&authSource=admin"
           - name: MONGO_DB
             value: "RabbiMq"
           - name: MONGO_COLLECTION

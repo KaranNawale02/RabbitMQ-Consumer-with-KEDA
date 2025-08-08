@@ -3,3 +3,6 @@
 .env
 .idea/
 .idea/*
+mongo/
+mongo/*
+python_files_rabbimtq_helper
